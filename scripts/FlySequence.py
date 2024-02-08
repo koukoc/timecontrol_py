@@ -15,6 +15,7 @@ class FlightSequence:
     SeparationState = False
     SeparationChecked = True
     MissionPause = False
+    RocketSOH = False
 
 
     def __firstStageIgnitionCallback(self,data):
@@ -26,6 +27,10 @@ class FlightSequence:
     def __SeparationStateCallback(self,data):
         self.SeparationState = data.data
     
+    def __checkRocketSOH(self,event):
+        self.RocketSOH = True
+        return
+
     def __init__(self):
         # safetySwitchCallback
         rospy.Subscriber('FirstStageIgnition',Bool,self.__firstStageIgnitionCallback)
@@ -81,18 +86,26 @@ class FlightSequence:
         return
     
     def Hold(self):
+        holdStart = rospy.get_time()
+        rospy.Timer(rospy.Duration(1),self.__checkRocketSOH,oneshot=False)
+        while (rospy.get_time()-holdStart) < 597.0:
+            if not self.RocketSOH:
+                print('Rocket SOH not healthy at',rospy.get_time())
+                holdStart = rospy.get_time()
+                print('Countdown Reset to t-10:00')
+            rospy.sleep(1)       
         return True
     
     def LiftOffMode(self):
         liftOffStart = rospy.get_time()
         self.__setFirstStageIgnite()
-        rospy.sleep(rospy.Duration(2.5))
+        rospy.sleep(2.5)
 
         while ((rospy.get_time()-liftOffStart) < 3):
             if self.safetySwitch or self.MissionPause:
                 # if safetySwitch failed or MissionPause stop and return False
                 return False
-            rospy.sleep(rospy.Duration(0.1))
+            rospy.sleep(0.1)
         
         # wait for 3 second
         if not self.FirstStageIgnition:
@@ -101,29 +114,29 @@ class FlightSequence:
             return False
         self.__setFirstStageMainValve(OPEN)
 
-        rospy.sleep(rospy.Duration(4.5))
+        rospy.sleep(4.5)
         while((rospy.get_time()-liftOffStart) < 8):
-            rospy.sleep(rospy.Duration(0.1))
+            rospy.sleep(0.1)
         
         return True
     
     def Separate(self):
         SeparationStart = rospy.get_time()
         self.__setFirstStageMainValve(CLOSE)
-        rospy.sleep(rospy.Duration(0.5))
+        rospy.sleep(0.5)
 
         while((rospy.get_time()-SeparationStart) < 1):
-            rospy.sleep(rospy.Duration(0.1))
+            rospy.sleep(0.1)
         # wait for 1 sec
         self.__setSeparation()
 
         rospy.Timer(rospy.Duration(1.5),self.__checkSeparation,oneshot=True)
         # TODO check separation if failed return
 
-        rospy.sleep(rospy.Duration(0.5))
+        rospy.sleep(0.5)
 
         while((rospy.get_time()-SeparationStart) < 2):
-            rospy.sleep(rospy.Duration(0.1))
+            rospy.sleep(0.1)
             
         
         self.__RCSActivation()
@@ -132,14 +145,14 @@ class FlightSequence:
             if not self.SeparationChecked and (now - SeparationStart) > 2.5:
                 print('Separation Failed at',now)
                 return False
-            rospy.sleep(rospy.Duration(0.1))
+            rospy.sleep(0.1)
             now = rospy.get_time()
 
         self.__setSecondStageIgnite()
 
-        rospy.sleep(rospy.Duration(2.5))
+        rospy.sleep(2.5)
         while((rospy.get_time()-SeparationStart) < 7):
-            rospy.sleep(rospy.Duration(0.1))
+            rospy.sleep(0.1)
 
         return True
     
@@ -149,7 +162,7 @@ class FlightSequence:
             print('Second Stage Ignition Failed at',rospy.get_time())
             return False
         self.__setSecondStageMainValve(OPEN)
-        rospy.Timer(rospy.Duration(15.0),self.__closeSecondStageMainValve,oneshot=True)
+        rospy.Timer(rospy.Duration(15),self.__closeSecondStageMainValve,oneshot=True)
         rospy.spin()
         return True
     
