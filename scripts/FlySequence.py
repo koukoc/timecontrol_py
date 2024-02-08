@@ -94,6 +94,7 @@ class FlightSequence:
                 holdStart = rospy.get_time()
                 print('Countdown Reset to t-10:00')
             rospy.sleep(1)       
+        rospy.Timer.shutdown()
         return True
     
     def LiftOffMode(self):
