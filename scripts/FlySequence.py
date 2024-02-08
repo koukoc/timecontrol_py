@@ -59,6 +59,10 @@ class FlightSequence:
             print('2nd Main Valve Closed at',rospy.get_time())
         return
     
+    def __closeSecondStageMainValve(self,event):
+        self.__setSecondStageMainValve(CLOSE)
+
+
     def __setSeparation(self):
         print('Separation activate at',rospy.get_time())
         return
@@ -145,6 +149,7 @@ class FlightSequence:
             print('Second Stage Ignition Failed at',rospy.get_time())
             return False
         self.__setSecondStageMainValve(OPEN)
+        rospy.Timer(rospy.Duration(15.0),self.__closeSecondStageMainValve,oneshot=True)
         rospy.spin()
         return True
     
