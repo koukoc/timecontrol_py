@@ -27,15 +27,25 @@ class FlightSequence:
     def __SeparationStateCallback(self,data):
         self.SeparationState = data.data
     
-    def __checkRocketSOH(self,event):
+    def __SafetySwitchStateCallback(self,data):
+        self.SafetySwitchState = data.data
+
+    def checkRocketSOH(self,event):
         self.RocketSOH = True
         return
+    
+    def checkSafetySwitch(self):
+        if self.SafetySwitchState:
+            return True
+        else:
+            return False
 
     def __init__(self):
         # safetySwitchCallback
         rospy.Subscriber('FirstStageIgnition',Bool,self.__firstStageIgnitionCallback)
         rospy.Subscriber('SecondStageIgnition',Bool,self.__secondStageIgnitionCallback)
         rospy.Subscriber('SeparationState',Bool,self.__SeparationStateCallback)
+        rospy.Subscriber('SafetySwitchState',Bool,self.__SafetySwitchStateCallback)
 
         # separation callback
         self.MissionStartTime = rospy.get_time()
@@ -87,13 +97,20 @@ class FlightSequence:
     
     def Hold(self):
         holdStart = rospy.get_time()
-        rospy.Timer(rospy.Duration(1),self.__checkRocketSOH,oneshot=False)
+        rospy.Timer(rospy.Duration(1),self.checkRocketSOH,oneshot=False)
         while (rospy.get_time()-holdStart) < 597.0:
             if not self.RocketSOH:
                 print('Rocket SOH not healthy at',rospy.get_time())
                 holdStart = rospy.get_time()
                 print('Countdown Reset to t-10:00')
-            rospy.sleep(1)       
+            if (rospy.get_time()-holdStart) > 537.0:
+                if self.checkSafetySwitch():
+                    print('Safety Switch ARMED')
+                else:
+                    print('Safety Switch Disarmed restart count down at t-60')
+                    holdStart = rospy.get_time()-537
+
+            rospy.sleep(0.5)       
         rospy.Timer.shutdown()
         return True
     
@@ -163,6 +180,7 @@ class FlightSequence:
             print('Second Stage Ignition Failed at',rospy.get_time())
             return False
         self.__setSecondStageMainValve(OPEN)
+        # TODO PX4 set rocket destination with MavROS
         rospy.Timer(rospy.Duration(15),self.__closeSecondStageMainValve,oneshot=True)
         rospy.spin()
         return True
