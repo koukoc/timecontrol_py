@@ -28,14 +28,14 @@ class FlightSequence:
         self.SeparationState = data.data
     
     def __SafetySwitchStateCallback(self,data):
-        self.SafetySwitchState = data.data
+        self.safetySwitch = data.data
 
     def checkRocketSOH(self,event):
         self.RocketSOH = True
         return
     
     def checkSafetySwitch(self):
-        if self.SafetySwitchState:
+        if self.safetySwitch:
             return True
         else:
             return False
@@ -46,13 +46,17 @@ class FlightSequence:
         rospy.Subscriber('SecondStageIgnition',Bool,self.__secondStageIgnitionCallback)
         rospy.Subscriber('SeparationState',Bool,self.__SeparationStateCallback)
         rospy.Subscriber('SafetySwitchState',Bool,self.__SafetySwitchStateCallback)
+        self.FirstStageIgnitePub = rospy.Publisher('FirstStageIgnite', Bool, queue_size=10)
+
 
         # separation callback
         self.MissionStartTime = rospy.get_time()
+        rospy.sleep(1)
         return
 
 
     def __setFirstStageIgnite(self):
+        self.FirstStageIgnitePub.publish(True)
         print('1st Stage Ignited at',rospy.get_time())
         return
     
@@ -98,20 +102,20 @@ class FlightSequence:
     def Hold(self):
         holdStart = rospy.get_time()
         rospy.Timer(rospy.Duration(1),self.checkRocketSOH,oneshot=False)
-        while (rospy.get_time()-holdStart) < 597.0:
+        while (rospy.get_time()-holdStart) < 9.0:
             if not self.RocketSOH:
                 print('Rocket SOH not healthy at',rospy.get_time())
                 holdStart = rospy.get_time()
                 print('Countdown Reset to t-10:00')
-            if (rospy.get_time()-holdStart) > 537.0:
+            if (rospy.get_time()-holdStart) > 3.0:
                 if self.checkSafetySwitch():
-                    print('Safety Switch ARMED')
+                    print('Safety Switch ARMED at',rospy.get_time())
                 else:
                     print('Safety Switch Disarmed restart count down at t-60')
                     holdStart = rospy.get_time()-537
 
             rospy.sleep(0.5)       
-        rospy.Timer.shutdown()
+        rospy.Timer.shutdown(self)
         return True
     
     def LiftOffMode(self):
@@ -155,14 +159,18 @@ class FlightSequence:
 
         while((rospy.get_time()-SeparationStart) < 2):
             rospy.sleep(0.1)
-            
         
-        self.__RCSActivation()
+        rcslaunchOnce = 0
         now = rospy.get_time()
         while((now - SeparationStart) < 4):
-            if not self.SeparationChecked and (now - SeparationStart) > 2.5:
-                print('Separation Failed at',now)
-                return False
+            if (now - SeparationStart) > 2.5:
+                if not self.SeparationChecked:
+                    print('Separation Failed at',now)
+                    return False
+                elif(rcslaunchOnce == 0):
+                    self.__RCSActivation()
+                    rcslaunchOnce = 1
+                
             rospy.sleep(0.1)
             now = rospy.get_time()
 
