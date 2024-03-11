@@ -2,6 +2,7 @@
 
 import rospy
 from std_msgs.msg import Bool
+from Autopilot import Autopilot
 OPEN = True
 CLOSE = False
 
@@ -47,7 +48,12 @@ class FlightSequence:
         rospy.Subscriber('SeparationState',Bool,self.__SeparationStateCallback)
         rospy.Subscriber('SafetySwitchState',Bool,self.__SafetySwitchStateCallback)
         self.FirstStageIgnitePub = rospy.Publisher('FirstStageIgnite', Bool, queue_size=10)
+        self.SecondStageIgnitePub = rospy.Publisher('SecondStageIgnite', Bool, queue_size=10)
+        self.FirstStageMainValvePub = rospy.Publisher('FirstStageMainValveOpened', Bool, queue_size=10)
+        self.SecondStageMainValvePub = rospy.Publisher('SecondStageMainValveOpened', Bool, queue_size=10)
+        self.SeparatePub = rospy.Publisher('Separate', Bool, queue_size=10)
 
+        self.Mission = Autopilot()
 
         # separation callback
         self.MissionStartTime = rospy.get_time()
@@ -61,20 +67,25 @@ class FlightSequence:
         return
     
     def __setSecondStageIgnite(self):
+        self.SecondStageIgnitePub.publish(True)
         print('2nd Stage Ignited at',rospy.get_time())
         return
     
     def __setFirstStageMainValve(self,command):
         if command:
+            self.FirstStageMainValvePub.publish(True)
             print('1st Main Valve Opened at',rospy.get_time())
         else:
+            self.FirstStageMainValvePub.publish(False)
             print('1st Main Valve Closed at',rospy.get_time())
         return
     
     def __setSecondStageMainValve(self,command):
         if command:
+            self.SecondStageMainValvePub.publish(True)
             print('2nd Main Valve Opened at',rospy.get_time())
         else:
+            self.SecondStageMainValvePub.publish(False)
             print('2nd Main Valve Closed at',rospy.get_time())
         return
     
@@ -83,6 +94,7 @@ class FlightSequence:
 
 
     def __setSeparation(self):
+        self.SeparatePub.publish(True)
         print('Separation activate at',rospy.get_time())
         return
     
@@ -96,18 +108,21 @@ class FlightSequence:
         return False
     
     def __RCSActivation(self):
+        self.Mission.startRollCtrl()
         print('RCS activate at',rospy.get_time())
         return
     
     def Hold(self):
         holdStart = rospy.get_time()
         rospy.Timer(rospy.Duration(1),self.checkRocketSOH,oneshot=False)
-        while (rospy.get_time()-holdStart) < 9.0:
+        # t-10:00
+        while (rospy.get_time()-holdStart) < 597.0:
             if not self.RocketSOH:
                 print('Rocket SOH not healthy at',rospy.get_time())
                 holdStart = rospy.get_time()
                 print('Countdown Reset to t-10:00')
-            if (rospy.get_time()-holdStart) > 3.0:
+            # t-60
+            if (rospy.get_time()-holdStart) > 537.0:
                 if self.checkSafetySwitch():
                     print('Safety Switch ARMED at',rospy.get_time())
                 else:
@@ -120,6 +135,7 @@ class FlightSequence:
     
     def LiftOffMode(self):
         liftOffStart = rospy.get_time()
+        # t-3
         self.__setFirstStageIgnite()
         rospy.sleep(2.5)
 
@@ -134,22 +150,25 @@ class FlightSequence:
         # Check ignition state before opening main valves
             print('First Stage Ignition Failed at',rospy.get_time())
             return False
+        # t Launch
         self.__setFirstStageMainValve(OPEN)
 
         rospy.sleep(4.5)
         while((rospy.get_time()-liftOffStart) < 8):
             rospy.sleep(0.1)
-        
+        # t+5
         return True
     
     def Separate(self):
         SeparationStart = rospy.get_time()
+        # t+5
         self.__setFirstStageMainValve(CLOSE)
         rospy.sleep(0.5)
 
         while((rospy.get_time()-SeparationStart) < 1):
             rospy.sleep(0.1)
         # wait for 1 sec
+        # t+6
         self.__setSeparation()
 
         rospy.Timer(rospy.Duration(1.5),self.__checkSeparation,oneshot=True)
@@ -157,29 +176,29 @@ class FlightSequence:
 
         rospy.sleep(0.5)
 
-        while((rospy.get_time()-SeparationStart) < 2):
-            rospy.sleep(0.1)
         
         rcslaunchOnce = 0
         now = rospy.get_time()
         while((now - SeparationStart) < 4):
             if (now - SeparationStart) > 2.5:
                 if not self.SeparationChecked:
+                    # t+7.5
                     print('Separation Failed at',now)
                     return False
                 elif(rcslaunchOnce == 0):
+                    # t+7.5
                     self.__RCSActivation()
                     rcslaunchOnce = 1
                 
             rospy.sleep(0.1)
             now = rospy.get_time()
-
+        # t+9
         self.__setSecondStageIgnite()
 
         rospy.sleep(2.5)
         while((rospy.get_time()-SeparationStart) < 7):
             rospy.sleep(0.1)
-
+        # t+12
         return True
     
     def Autopilot(self):
@@ -187,9 +206,13 @@ class FlightSequence:
         # Check ignition state before opening main valves
             print('Second Stage Ignition Failed at',rospy.get_time())
             return False
+        # t+12 無論減滾有無成功先開主閥，再檢查減滾是否成功，減滾成功則進入導航模式，失敗則繼續飛行
         self.__setSecondStageMainValve(OPEN)
+        if self.Mission.checkDespin():
+            self.Mission.startAttitudeCtrl()
         # TODO PX4 set rocket destination with MavROS
-        rospy.Timer(rospy.Duration(15),self.__closeSecondStageMainValve,oneshot=True)
+        # 第二節火箭不關閉
+        # rospy.Timer(rospy.Duration(15),self.__closeSecondStageMainValve,oneshot=True)
         rospy.spin()
         return True
     
