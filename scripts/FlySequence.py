@@ -54,7 +54,9 @@ class FlightSequence:
         self.SeparatePub = rospy.Publisher('Separate', Bool, queue_size=10)
 
         self.Mission = Autopilot()
-
+        while not self.Mission.updateAutopilotState():
+            rospy.loginfo('Autpilot Not Ready')
+            rospy.sleep(0.5)
         # separation callback
         self.MissionStartTime = rospy.get_time()
         rospy.sleep(1)
