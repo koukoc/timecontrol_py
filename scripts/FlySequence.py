@@ -110,36 +110,36 @@ class FlightSequence:
         return False
     
     def __RCSActivation(self):
-        self.Mission.startRollCtrl()
-        print('RCS activate at',rospy.get_time())
+        self.Mission.rollCtrl()
+        print('RollRate Control activate at',rospy.get_time())
         return
     
     def Hold(self):
         holdStart = rospy.get_time()
-        rospy.Timer(rospy.Duration(1),self.checkRocketSOH,oneshot=False)
+        checkSOHTimer=rospy.Timer(rospy.Duration(1),self.checkRocketSOH,oneshot=False)
         # t-10:00
-        while (rospy.get_time()-holdStart) < 597.0:
+        while (rospy.get_time()-holdStart) < 598.0:
             if not self.RocketSOH:
                 print('Rocket SOH not healthy at',rospy.get_time())
                 holdStart = rospy.get_time()
                 print('Countdown Reset to t-10:00')
             # t-60
-            if (rospy.get_time()-holdStart) > 537.0:
+            if (rospy.get_time()-holdStart) > 538.0:
                 if self.checkSafetySwitch():
                     print('Safety Switch ARMED at',rospy.get_time())
                 else:
                     print('Safety Switch Disarmed restart count down at t-60')
-                    holdStart = rospy.get_time()-537
+                    holdStart = rospy.get_time()-538
 
             rospy.sleep(0.5)       
-        rospy.Timer.shutdown(self)
+        checkSOHTimer.shutdown()
         return True
     
     def LiftOffMode(self):
         liftOffStart = rospy.get_time()
-        # t-3
+        # t-2
         self.__setFirstStageIgnite()
-        rospy.sleep(2.5)
+        rospy.sleep(1.5)
 
         while ((rospy.get_time()-liftOffStart) < 3):
             if self.safetySwitch or self.MissionPause:
@@ -181,7 +181,7 @@ class FlightSequence:
         
         rcslaunchOnce = 0
         now = rospy.get_time()
-        while((now - SeparationStart) < 4):
+        while((now - SeparationStart) < 5):
             if (now - SeparationStart) > 2.5:
                 if not self.SeparationChecked:
                     # t+7.5
@@ -194,7 +194,7 @@ class FlightSequence:
                 
             rospy.sleep(0.1)
             now = rospy.get_time()
-        # t+9
+        # t+10
         self.__setSecondStageIgnite()
 
         rospy.sleep(2.5)
