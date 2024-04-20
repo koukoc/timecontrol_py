@@ -139,15 +139,14 @@ class FlightSequence:
         liftOffStart = rospy.get_time()
         # t-2
         self.__setFirstStageIgnite()
-        rospy.sleep(1.5)
 
-        while ((rospy.get_time()-liftOffStart) < 3):
+        while ((rospy.get_time()-liftOffStart) < 2):
             if self.safetySwitch or self.MissionPause:
                 # if safetySwitch failed or MissionPause stop and return False
                 return False
             rospy.sleep(0.1)
         
-        # wait for 3 second
+        # wait for 2 second
         if not self.FirstStageIgnition:
         # Check ignition state before opening main valves
             print('First Stage Ignition Failed at',rospy.get_time())
@@ -155,8 +154,8 @@ class FlightSequence:
         # t Launch
         self.__setFirstStageMainValve(OPEN)
 
-        rospy.sleep(4.5)
-        while((rospy.get_time()-liftOffStart) < 8):
+        rospy.sleep(2.5)
+        while((rospy.get_time()-liftOffStart) < 7):
             rospy.sleep(0.1)
         # t+5
         return True
@@ -173,10 +172,9 @@ class FlightSequence:
         # t+6
         self.__setSeparation()
 
-        rospy.Timer(rospy.Duration(1.5),self.__checkSeparation,oneshot=True)
+        SeparationCheck = rospy.Timer(rospy.Duration(0.3),self.__checkSeparation)
         # TODO check separation if failed return
 
-        rospy.sleep(0.5)
 
         
         rcslaunchOnce = 0
@@ -186,18 +184,20 @@ class FlightSequence:
                 if not self.SeparationChecked:
                     # t+7.5
                     print('Separation Failed at',now)
-                    return False
                 elif(rcslaunchOnce == 0):
                     # t+7.5
                     self.__RCSActivation()
                     rcslaunchOnce = 1
+                    SeparationCheck.shutdown()
                 
             rospy.sleep(0.1)
             now = rospy.get_time()
+        if not self.SeparationChecked:
+            print('Separation Failed at t+10 mission abort')
+            return False
         # t+10
         self.__setSecondStageIgnite()
 
-        rospy.sleep(2.5)
         while((rospy.get_time()-SeparationStart) < 7):
             rospy.sleep(0.1)
         # t+12
