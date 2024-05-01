@@ -11,7 +11,8 @@ if __name__ == '__main__':
     # rospy.Timer(rospy.Duration(0.1),printTime)
 
     Seq=FlightSequence()
-    ModePassed = Seq.Hold()
+    # ModePassed = Seq.Hold()
+    ModePassed = True
     if ModePassed:
         ModePassed = Seq.LiftOffMode()
     if ModePassed:
@@ -19,3 +20,5 @@ if __name__ == '__main__':
 
     if  ModePassed:
         ModePassed = Seq.Autopilot()
+
+    rospy.spin()

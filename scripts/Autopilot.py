@@ -53,8 +53,9 @@ class Autopilot:
         rospy.Subscriber('mavros/local_position/pose',PoseStamped,self.__local_positionCallback)
         rospy.Subscriber('local_position/velocity',NavSatFix,self.__AngularVelCallback)
         rospy.Subscriber('mavros/global_position/global',NavSatFix,self.__global_positionCallback)
-        rospy.Publisher('FirstStageIgnite', PoseStamped, queue_size=10)
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        self.attitude_pub = rospy.Publisher('/mavros/setpoint_attitude/attitude', PoseStamped, queue_size=10)
+        self.AltitudeSetpoint = PoseStamped()
 
 
     # def lla2ecef(self):
@@ -107,11 +108,11 @@ class Autopilot:
     def __global_positionCallback(self,data):
         self.GlobalPositionlla = [data.latitude,data.longitude,data.altitude]
         
-    def despin(self,network):
+    def despin(self):
         observation=np.array([self.rollRate], dtype=np.float32)
         
         state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0)
-        action = network(state).max(1)[1].view(1, 1)-1
+        action = self.policy_net(state).max(1)[1].view(1, 1).item()-1
         assert action == 1 or action == 0 or action == -1,'despin command error'
         if action == 1:
             MCONTERCLOCKWISE.on()
@@ -131,18 +132,20 @@ class Autopilot:
         else:
             return False
 
-    def rollCtrl(self):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        policy_net = DQN().to(device)
-        policy_net.load_state_dict(torch.load('rollRateControl.pt'))
-        policy_net.eval()
-        rospy.Timer(rospy.Duration(nsecs=5e5),self.__despinpub(policy_net),oneshot=False)
+
+
+    def rollCtrlStart(self):
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.policy_net = DQN().to(self.device)
+        self.policy_net.load_state_dict(torch.load('rollRateControl.pt'))
+        self.policy_net.eval()
+        self.rollCTRLcb=rospy.Timer(rospy.Duration(nsecs=5e8),self.despin(),oneshot=False)
         # 加despin callback
 
-    def despinStop(seif):
-        rospy.Timer.shutdown()
+    def despinStop(self):
+        self.rollCTRLcb.shutdown()
     
-    def getAltitudeSetpoint(self,Targetlla,):
+    def getAltitudeSetpoint(self,Targetlla):
         enu_err = pm.geodetic2enu(Targetlla[0], Targetlla[1], Targetlla[2], self.GlobalPositionlla[0], self.GlobalPositionlla[1], self.GlobalPositionlla[2])
         azimuthOri = np.arctan2(enu_err[0],enu_err[1])
         elevationOri = np.arctan2(enu_err[2],enu_err[1])
@@ -165,10 +168,34 @@ class Autopilot:
         t1 = +1.0 - 2.0 * (x * x + ysqr)
         self.RollAngle = np.degrees(np.arctan2(t0, t1))
 
+    def euler2Qua(self,azimuth,elevation):
+        cp = np.cos(elevation*0.5)
+        sp = np.sin(elevation*0.5)
+        cy = np.cos(azimuth*0.5)
+        sy = np.sin(azimuth*0.5)
+        w = cp * cy
+        x = -sp * sy
+        y = sp * cy 
+        z = cp * sy 
+        return w,x,y,z
+
     def AttitudeCtrl(self):
         Targetlla = [474977420e-7,85555940e-7,10000]
         self.getRollAngle(self.rocketQuaternion.w,self.rocketQuaternion.x,self.rocketQuaternion.y,self.rocketQuaternion.z) 
                           # update Roll Angle value
-        azimuth,elevation = self.getAltitudeSetpoint(Targetlla)
-
+        AltitudeSetpointEul = self.getAltitudeSetpoint(Targetlla)
+        AltitudeSetpointQua=self.euler2Qua(AltitudeSetpointEul[0],AltitudeSetpointEul[1])
+        self.AltitudeSetpoint.pose.orientation.w = AltitudeSetpointQua[0]
+        self.AltitudeSetpoint.pose.orientation.x = AltitudeSetpointQua[1]
+        self.AltitudeSetpoint.pose.orientation.y = AltitudeSetpointQua[2]
+        self.AltitudeSetpoint.pose.orientation.z = AltitudeSetpointQua[3]
+        self.attitude_pub.publish(self.AltitudeSetpoint)
         # send control command
+
+    def startAttitudeCtrl(self):
+        self.rollCTRLcb=rospy.Timer(rospy.Duration(nsecs=5e7),self.despin(),oneshot=False)
+    
+    def stopAttitudeCtrl(self):
+        self.rollCTRLcb.shutdown()
+
+       

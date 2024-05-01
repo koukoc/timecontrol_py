@@ -110,7 +110,7 @@ class FlightSequence:
         return False
     
     def __RCSActivation(self):
-        self.Mission.rollCtrl()
+        self.Mission.rollCtrlStart()
         print('RollRate Control activate at',rospy.get_time())
         return
     
@@ -212,10 +212,9 @@ class FlightSequence:
         self.__setSecondStageMainValve(OPEN)
         if self.Mission.checkDespin():
             self.Mission.startAttitudeCtrl()
-        # TODO PX4 set rocket destination with MavROS
+        # PX4 set rocket destination with MavROS
         # 第二節火箭不關閉
         # rospy.Timer(rospy.Duration(15),self.__closeSecondStageMainValve,oneshot=True)
-        rospy.spin()
         return True
     
 
