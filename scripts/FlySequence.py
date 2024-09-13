@@ -83,7 +83,7 @@ class FlightSequence:
     def __setFirstStageIgnite(self):
         self.FirstStageChargedPub.publish(True)
         print('ignitor charged')
-        rospy.sleep(5.0)
+        rospy.sleep(6.0)
         self.FirstStageIgnitePub.publish(True)
         print('1st Stage Ignited at',rospy.get_time())
         self.FirstStageDischargedPub.publish(True)
@@ -164,6 +164,7 @@ class FlightSequence:
         for groundFire in range(100):
             # if recieved fire signal from groundstation, start first stage ignite 
             if self.GroundFireSignal and not igniteOnce:
+                print('recieved signal')
                 self.__setFirstStageIgnite()
                 ignitetime = rospy.get_time()
                 igniteOnce = True
@@ -176,8 +177,13 @@ class FlightSequence:
             if self.FirstStageMainValveState and self.leavetheRackState:
                 self.LiftOffModeTime = rospy.get_time()
                 break
-            else:
+            elif self.FirstStageMainValveState:
+                print('wait for First Stage Main Valve at',rospy.get_time())
+            elif self.leavetheRackState:
                 print('wait for rocket leave rack at',rospy.get_time())
+            else:
+                print('wait for rocket leave rack and First Stage Main Valve at',rospy.get_time())
+
                 
             # check every 0.1 second after countdown end
             rospy.sleep(0.1)
