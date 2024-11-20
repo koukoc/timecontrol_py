@@ -217,7 +217,7 @@ class FlightSequence:
         
         rcslaunchOnce = 0
         now = rospy.get_time()
-        while((now - SeparationStart) < 5):
+        while((now - SeparationStart) < 6.5):
             if (now - SeparationStart) > 2.5:
                 if not self.SeparationChecked:
                     # t+7.5
@@ -233,7 +233,7 @@ class FlightSequence:
         if not self.SeparationChecked:
             print('Separation Failed at t+10 mission abort')
             return False
-        # t+10
+        # t+10.5
         self.__setSecondStageIgnite()
 
         while((rospy.get_time()-SeparationStart) < 7):
