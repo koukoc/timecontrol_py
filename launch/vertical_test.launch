@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- <include file="$(find mavros)/launch/px4.launch">
+    </include> -->
+
+    <!-- <node pkg="rosserial_python" type="serial_node.py" name="serial_node1">
+        <param name="port" value="/dev/ttyUSB1"/>
+        <param name="baud" value="57600"/>
+    </node> -->
+    <!-- <node pkg="telemetry" type="ros_sendmsg.py" name="telemetrynode_py" required="true" /> -->
+    <node pkg="timecontrol_py" type="vertical_test.py" name="vertical_test_node_py" required="true" output="screen"/>
+
+</launch>

@@ -3,6 +3,7 @@
 import rospy
 from std_msgs.msg import Bool
 from Autopilot import Autopilot
+from pressureState import PressureState
 OPEN = True
 CLOSE = False
 
@@ -13,6 +14,7 @@ class FlightSequence:
     MissionStartTime = 0
     GroundFireSignal = False
     FirstStageMainValveState = False
+    FirstStageIgnitionState = False
     leavetheRackState = False
     FirstStageIgnition = False
     SecondStageIgnition = False
@@ -44,6 +46,15 @@ class FlightSequence:
         self.leavetheRackState = data.data
 
     def checkRocketSOH(self,event):
+        if self.PressureSub.FirstTankPressure > 75 or self.PressureSub.FirstTankPressure < 50:
+            self.RocketSOH = False
+        
+        if self.PressureSub.SecondTankPressure > 70 or self.PressureSub.SecondTankPressure < 50:
+            self.RocketSOH = False
+
+        if self.PressureSub.RCSTankPressure > 15 or self.PressureSub.RCSTankPressure < 5: #TODO needs to be check
+            self.RocketSOH = False
+
         self.RocketSOH = True
         return
     
@@ -54,6 +65,7 @@ class FlightSequence:
             return False
 
     def __init__(self):
+        self.PressureSub = PressureState()
         # safetySwitchCallback
         rospy.Subscriber('GroundFireSignalState',Bool,self.__GroundFireSignalCallback)
         rospy.Subscriber('FirstStageIgnitionState',Bool,self.__firstStageIgnitionStateCallback)
@@ -61,6 +73,7 @@ class FlightSequence:
         rospy.Subscriber('SeparationState',Bool,self.__SeparationStateCallback)
         rospy.Subscriber('SafetySwitchState',Bool,self.__SafetySwitchStateCallback)
         rospy.Subscriber('FirstStageMainValveState',Bool,self.__FirstStageMainValveStateCallback)
+        # TODO second stage valve check
         rospy.Subscriber('leavetheRackState',Bool,self.__leavetheRackStateCallback)
         self.FirstStageIgnitePub = rospy.Publisher('FirstStageIgnite', Bool, queue_size=10)
         self.FirstStageChargedPub = rospy.Publisher('FirstStageCharged', Bool, queue_size=10)
@@ -75,7 +88,7 @@ class FlightSequence:
         #     rospy.loginfo('Autpilot Not Ready')
         #     rospy.sleep(0.5)
         # separation callback
-        self.MissionStartTime = rospy.get_time()
+        # self.MissionStartTime = rospy.get_time()
         rospy.sleep(1)
         return
 
@@ -161,47 +174,64 @@ class FlightSequence:
     def LiftOffMode(self):
         igniteOnce = False
         ignitetime = 0
+        # TODO change to duration
         for groundFire in range(100):
+            rospy.loginfo('%.1f sec to send iginite signal',10-groundFire*0.1)
             # if recieved fire signal from groundstation, start first stage ignite 
             if self.GroundFireSignal and not igniteOnce:
                 print('recieved signal')
                 self.__setFirstStageIgnite()
-                ignitetime = rospy.get_time()
                 igniteOnce = True
-            
-            if igniteOnce and (rospy.get_time()-ignitetime)>2 and not self.FirstStageMainValveState:
-            # Opened valve 2 seconds after ignite happened, then open first stage valve 
-                self.__setFirstStageMainValve(True)
-
-            # if and only if first stage valve open and rocket leave rack then continous mission
-            if self.FirstStageMainValveState and self.leavetheRackState:
-                self.LiftOffModeTime = rospy.get_time()
                 break
-            elif self.FirstStageMainValveState:
-                print('wait for First Stage Main Valve at',rospy.get_time())
-            elif self.leavetheRackState:
-                print('wait for rocket leave rack at',rospy.get_time())
-            else:
-                print('wait for rocket leave rack and First Stage Main Valve at',rospy.get_time())
-
-                
             # check every 0.1 second after countdown end
             rospy.sleep(0.1)
             if groundFire == 99:
-                print('countdown timeout without fire on ground')
+                print('countdown timeout without fire signal on ground')
                 # rospy.loginfo
                 return False
+            ignitetime = rospy.get_time()
+        while(True):
+            if self.FirstStageIgnitionState:
+                ignitetime = rospy.get_time()
+                rospy.loginfo('start waiting for main valve open')
+                
+            if igniteOnce and (rospy.get_time()-ignitetime)>1.5 and not self.FirstStageMainValveState:
+            # Opened valve 1.5 seconds after ignite happened, then open first stage valve 
+                self.__setFirstStageMainValve(True)
 
-        rospy.sleep(2.5)
+            # if and only if first stage valve open and then continous mission
+            if self.FirstStageMainValveState:
+                self.LiftOffModeTime = rospy.get_time()
+                break
+            else:
+                print('wait for First Stage Main Valve at',rospy.get_time())
+            
+            if (rospy.get_time()-ignitetime)>5:
+                rospy.loginfo('wait for main Valve for too long')
+                return False
+
+            
+        
+        while not self.leavetheRackState:
+            rospy.sleep(0.01)
+            if (rospy.get_time()-self.LiftOffModeTime) > 5:
+                self.__setFirstStageMainValve(False)
+                # if rocket not leaving the rack after first stage main valve opened 2 sec
+                # close main valve and interrupting mission
+                return False
+            
+        self.MissionStartTime = rospy.get_time()
+        # Mission Start time defined at when rocket leave the rack
+
         while((rospy.get_time()-self.LiftOffModeTime) < 5):
             rospy.sleep(0.1)
+        self.__setFirstStageMainValve(CLOSE)
         # t+5
         return True
     
     def Separate(self):
         SeparationStart = rospy.get_time()
         # t+5
-        self.__setFirstStageMainValve(CLOSE)
         rospy.sleep(0.5)
 
         while((rospy.get_time()-SeparationStart) < 1):
