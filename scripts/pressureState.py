@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
-from std_msgs.msg import UInt16
+from std_msgs.msg import UInt16,Float32
 
 class PressureState:
     FirstEnginePressure = 0
@@ -29,15 +29,15 @@ class PressureState:
     
     def __init__(self):
         # fisrt stage pressure transducer subscriber
-        self.FirstEnginePressureSub = rospy.Subscriber("FirstEnginePressure",UInt16,self.__FirstEnginePressureSub)
-        self.FirstTankPressureSub = rospy.Subscriber("FirstTankPressure",UInt16,self.__FirstTankPressureSub)
+        self.FirstEnginePressureSub = rospy.Subscriber("FirstEnginePressure",Float32,self.__FirstEnginePressureSub)
+        self.FirstTankPressureSub = rospy.Subscriber("FirstTankPressure",Float32,self.__FirstTankPressureSub)
 
         # second stage pressure transducer subscriber
-        self.SecondEnginePressureSub = rospy.Subscriber("SecondEnginePressure",UInt16,self.__SecondEnginePressureSub)
-        self.SecondTankPressureSub = rospy.Subscriber("SecondTankPressure",UInt16,self.__SecondTankPressureSub)
+        self.SecondEnginePressureSub = rospy.Subscriber("SecondEnginePressure",Float32,self.__SecondEnginePressureSub)
+        self.SecondTankPressureSub = rospy.Subscriber("SecondTankPressure",Float32,self.__SecondTankPressureSub)
 
         # RCS Pressure transducer subscriber
-        self.RCSTankPressureSub1 = rospy.Subscriber("RCSTankPressure",UInt16,self.__RCSTankPressureSub)
+        self.RCSTankPressureSub1 = rospy.Subscriber("RCSTankPressure",Float32,self.__RCSTankPressureSub)
 
     def unscribeFirstStage(self):
         self.FirstEnginePressureSub.unregister()

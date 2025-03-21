@@ -77,8 +77,8 @@ class FlightSequence:
         rospy.Subscriber('leavetheRackState',Bool,self.__leavetheRackStateCallback)
 
         # First Stage igniter publishment
-        self.FirstStageIgnitePub = rospy.Publisher('FirstStageIgnite', Bool, queue_size=10)
-        self.FirstStageChargedPub = rospy.Publisher('FirstStageCharged', Bool, queue_size=10)
+        self.FirstStageIgnitePub = rospy.Publisher('FirstStageIgnite', Bool, queue_size=30)
+        self.FirstStageChargedPub = rospy.Publisher('FirstStageCharged', Bool, queue_size=30)
         self.FirstStageDischargedPub = rospy.Publisher('FirstStageDischarged', Bool, queue_size=10)
 
         # Second stage igniter publishment
@@ -98,6 +98,9 @@ class FlightSequence:
         #     rospy.sleep(0.5)
         # separation callback
         # self.MissionStartTime = rospy.get_time()
+        self.FirstStageChargedPub.publish(False)
+        self.SecondStageChargedPub.publish(False)
+        self.FirstStageIgnitePub.publish(False)
         rospy.sleep(1)
         return
 
@@ -108,15 +111,17 @@ class FlightSequence:
         self.SecondStageChargedPub.publish(True)
         print('ignitor charged')
         # 12 sec was verified
-        # TODO check 10 sec
+        # check 5 sec
         rospy.sleep(10.0)
+        # self.FirstStageChargedPub.publish(False)
+        # rospy.sleep(3.0)
         self.FirstStageIgnitePub.publish(True)
         print('1st Stage Ignited at',rospy.get_time())
         self.FirstStageIgnitionState=True
         # discharge
         # self.FirstStageDischargedPub.publish(True)
-        rospy.Timer(rospy.Duration(1),self.__setFirstStageIgniterDischarge,oneshot=True)
-        print('ignitor discharged')
+        # rospy.Timer(rospy.Duration(2),self.__setFirstStageIgniterDischarge,oneshot=True)
+        # print('ignitor discharged')
 
         return
 
@@ -129,7 +134,7 @@ class FlightSequence:
         self.SecondStageIgnitePub.publish(True)
         self.SecondStageIgnitionState=True
         # discharge Second Stage igniter 1 sec after ignition 
-        rospy.Timer(rospy.Duration(1),self.__setSecondStageIgniterDischarge,oneshot=True)
+        # rospy.Timer(rospy.Duration(1),self.__setSecondStageIgniterDischarge,oneshot=True)
         print('2nd Stage Ignited at',rospy.get_time())
         return
     
@@ -208,7 +213,8 @@ class FlightSequence:
             # if recieved fire signal from groundstation, start first stage ignite 
             if self.GroundFireSignal and not igniteOnce:
                 print('recieved signal')
-                rospy.Timer(rospy.Duration(secs=0,nsecs=1),self.__setFirstStageIgnite(),oneshot=True)
+                # rospy.Timer(rospy.Duration(secs=0,nsecs=1),self.__setFirstStageIgnite(),oneshot=True)
+                self.__setFirstStageIgnite()
                 igniteOnce = True
                 ignitetime = rospy.get_time()
                 break
@@ -226,9 +232,11 @@ class FlightSequence:
                 break
             rospy.sleep(0.05)
         while(True):
-            if (rospy.get_time()-ignitetime)>1.5:
+            if (rospy.get_time()-ignitetime)>2.0: # change to 2sec for latency
             # Opened valve 1.5 seconds after ignite happened, then open first stage valve 
                 self.__setFirstStageMainValve(True)
+            else:
+                continue
 
             # if and only if first stage valve open and then continous mission
             if self.FirstStageMainValveState>0.9 and self.FirstStageMainValveState<1.1:
@@ -244,14 +252,14 @@ class FlightSequence:
             rospy.sleep(0.1)
 
             
-        
-        while not self.leavetheRackState:
-            rospy.sleep(0.01)
-            if (rospy.get_time()-self.LiftOffModeTime) > 5:
-                self.__setFirstStageMainValve(False)
-                # if rocket not leaving the rack after first stage main valve opened 2 sec
-                # close main valve and interrupting mission
-                return False
+        # TODO
+        # while not self.leavetheRackState:
+        #     rospy.sleep(0.01)
+        #     if (rospy.get_time()-self.LiftOffModeTime) > 5:
+        #         self.__setFirstStageMainValve(False)
+        #         # if rocket not leaving the rack after first stage main valve opened 2 sec
+        #         # close main valve and interrupting mission
+        #         return False
             
         self.MissionStartTime = rospy.get_time()
         # Mission Start time defined at when rocket leave the rack
